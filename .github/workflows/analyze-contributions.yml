@@ -1,0 +1,5 @@
+- name: Analyze GitHub Profile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Your PAT secret
+        run: |
+          python scripts/analyze_github_profile.py ${{ steps.get-username.outputs.username }}
