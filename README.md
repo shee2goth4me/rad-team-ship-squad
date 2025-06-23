@@ -4,7 +4,7 @@
 
 ## 🎯 The Mission
 
-We're building a **Ship-Every-Friday** squad for our OTT platform. We need MERN + Python developers who treat GenAI tools—Cursor, Claude, Codeium, whatever—as first-class teammates.
+We're building a **Ship-Every-Friday** Rapid Application Deployment squad for our OTT platform. We need MERN + Python developers who treat GenAI tools—Cursor, Claude, Codeium, whatever—as first-class teammates.
 
 ### 🏃‍♂️ How We Roll
 
