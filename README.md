@@ -60,16 +60,6 @@ Our system automatically:
 - ✅ Evaluates your code quality and documentation
 - ✅ Checks for production-ready mindset (tests, CI/CD, monitoring)
 
-## 🏆 Current Squad Stats
-
-| Metric | Value |
-|--------|-------|
-| Features Shipped Last Month | 47 |
-| Average Deploy Time | 12 minutes |
-| Production Incidents | 0.3% |
-| Friday Toasts | 100% |
-| AI Tools in Stack | 7+ |
-
 ## 🎮 The Application Process
 
 ```mermaid
