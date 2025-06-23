@@ -1,0 +1,103 @@
+# Ship-Every-Friday Squad Application
+# All we need is your GitHub - but tell us more if you want!
+
+essentials:
+  github_username: # REQUIRED - This is all we really need
+  email: # REQUIRED - For the good news
+  full_name: # REQUIRED - What should we call you?
+
+# THE MAIN EVENT - Your GitHub tells the story, but help us understand your GenAI game
+
+genai_mastery:
+  primary_tools: # Which AI coding tools do you use daily?
+    - tool: # e.g., Cursor
+      proficiency: # beginner/intermediate/expert/wizard
+      favorite_use_case: # How does it make you ship faster?
+    
+    - tool: # e.g., Claude
+      proficiency:
+      favorite_use_case:
+    
+    - tool: # e.g., GitHub Copilot
+      proficiency:
+      favorite_use_case:
+  
+  ai_shipping_stories: # Tell us about shipping with AI
+    - story: # e.g., "Built entire auth system with Cursor in 2 hours"
+      impact: # What happened when it went live?
+      tools_used: # Which AI tools helped?
+  
+  experimental_tools: # Any bleeding-edge AI tools you're trying?
+    - 
+
+tech_stack_alignment:
+  mern_experience:
+    years: # How long with MERN?
+    recent_project: # GitHub link to MERN project
+    comfort_level: # 1-10
+  
+  python_experience:
+    years:
+    use_cases: # Backend services, data processing, etc.
+      - 
+    frameworks: # FastAPI, Django, Flask?
+      - 
+  
+  production_mindset:
+    testing_approach: # How do you test for millions of users?
+    monitoring_tools: # Datadog, Sentry, etc.
+      - 
+    ci_cd_experience: # GitHub Actions, etc.
+      - 
+    biggest_prod_userbase: # Largest audience you've shipped to?
+
+shipping_velocity:
+  fastest_feature_shipped: # From idea to prod
+    description:
+    time_taken:
+    users_impacted:
+  
+  weekly_commit_average: # Roughly how many commits/week?
+  
+  friday_availability: # Can you do ship-every-Friday?
+    answer: # yes/absolutely/try-and-stop-me
+    timezone: # Your timezone
+  
+  startup_experience: # Worked in fast-paced environments?
+    - company:
+      pace: # How fast did you ship?
+
+open_source_highlights:
+  # Your top contributions (our bot will verify these)
+  proudest_contributions:
+    - project:
+      contribution:
+      impact:
+  
+  maintained_projects:
+    - name:
+      stars:
+      users:
+
+why_ship_squad:
+  motivation: # Why join our Friday shipping cult?
+  
+  dream_feature: # What would you build in your first week?
+  
+  caffeine_preference: # Coffee/Tea/Energy drinks/Other?
+  
+  favorite_deploy_gif: # Drop a GIF URL that captures your deploy vibe
+
+availability:
+  start_date: # When can you ship your first feature?
+  
+  commitment_level: # full-time/part-time/contract
+  
+  first_friday: # Which Friday can we toast your first deploy?
+
+# Auto-filled by our system
+metadata:
+  applied_date: # YYYY-MM-DD
+  github_analyzed: false
+  score_generated: false
+  memes_per_minute: null
