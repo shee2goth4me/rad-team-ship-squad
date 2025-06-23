@@ -1,5 +1,368 @@
-- name: Analyze GitHub Profile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Your PAT secret
+name: Analyze Shipping Potential
+
+on:
+  pull_request:
+    paths:
+      - 'applications/2025/pending/*.yml'
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_run:
+    workflows: ["Validate Application"]
+    types:
+      - completed
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
         run: |
-          python scripts/analyze_github_profile.py ${{ steps.get-username.outputs.username }}
+          python -m pip install --upgrade pip
+          pip install PyGithub pandas pyyaml requests
+      
+      - name: Extract GitHub username
+        id: get-username
+        run: |
+          # Find the application file from the PR
+          echo "Finding application files..."
+          
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep "applications/2025/pending/.*\.yml$" || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No application files found in PR"
+            exit 1
+          fi
+          
+          # Get the first application file
+          APP_FILE=$(echo "$CHANGED_FILES" | head -n 1)
+          echo "Found application file: $APP_FILE"
+          
+          # Extract username from filename
+          USERNAME=$(basename "$APP_FILE" .yml)
+          echo "Extracted username: $USERNAME"
+          
+          echo "username=$USERNAME" >> $GITHUB_OUTPUT
+          echo "app_file=$APP_FILE" >> $GITHUB_OUTPUT
+      
+      - name: Create analysis scripts
+        run: |
+          mkdir -p scripts
+          
+          # Create analyze_github_profile.py
+          cat > scripts/analyze_github_profile.py << 'SCRIPT_END'
+          #!/usr/bin/env python3
+          import os
+          import sys
+          import json
+          from github import Github
+          from datetime import datetime, timedelta
+          from collections import defaultdict
+          
+          def analyze_profile(username, token):
+              g = Github(token)
+              try:
+                  user = g.get_user(username)
+              except:
+                  print(f"Error: Could not find user {username}")
+                  return None
+              
+              analysis = {
+                  'genai_score': 0,
+                  'oss_score': 0,
+                  'projects_score': 0,
+                  'activity_score': 0,
+                  'prod_score': 0
+              }
+              
+              # Analyze repositories
+              ai_tool_count = 0
+              oss_projects = 0
+              total_stars = 0
+              has_ci_cd = False
+              has_tests = False
+              
+              repos = user.get_repos()
+              for repo in repos[:30]:  # Limit to 30 repos for API rate limits
+                  if not repo.fork:
+                      # Check for AI tool configs
+                      try:
+                          contents = repo.get_contents("")
+                          for content in contents:
+                              if content.name in ['.cursorrules', '.claude', '.copilot', 'cursor.json']:
+                                  ai_tool_count += 1
+                                  break
+                      except:
+                          pass
+                      
+                      # Check for CI/CD
+                      try:
+                          repo.get_contents(".github/workflows")
+                          has_ci_cd = True
+                      except:
+                          pass
+                      
+                      # Check for tests
+                      try:
+                          test_dirs = ['test', 'tests', '__tests__', 'spec']
+                          for test_dir in test_dirs:
+                              try:
+                                  repo.get_contents(test_dir)
+                                  has_tests = True
+                                  break
+                              except:
+                                  pass
+                      except:
+                          pass
+                      
+                      # Count stars
+                      total_stars += repo.stargazers_count
+                      if repo.stargazers_count > 10:
+                          oss_projects += 1
+              
+              # Calculate scores
+              # GenAI Score (max 50)
+              analysis['genai_score'] = min(ai_tool_count * 10, 50)
+              
+              # OSS Score (max 30)
+              analysis['oss_score'] = min(oss_projects * 5 + min(total_stars, 10), 30)
+              
+              # Projects Score (max 10)
+              analysis['projects_score'] = min(user.public_repos, 10)
+              
+              # Activity Score (max 5)
+              analysis['activity_score'] = 5 if user.public_repos > 10 else 3
+              
+              # Production Score (max 5)
+              if has_ci_cd:
+                  analysis['prod_score'] += 2
+              if has_tests:
+                  analysis['prod_score'] += 2
+              analysis['prod_score'] = min(analysis['prod_score'] + 1, 5)
+              
+              return analysis
+          
+          if __name__ == "__main__":
+              username = sys.argv[1]
+              token = os.environ.get('GITHUB_TOKEN', '')
+              
+              result = analyze_profile(username, token)
+              if result:
+                  # Output results for GitHub Actions
+                  total = sum(result.values())
+                  print(f"::set-output name=total_score::{total}")
+                  print(f"::set-output name=genai_score::{result['genai_score']}")
+                  print(f"::set-output name=oss_score::{result['oss_score']}")
+                  print(f"::set-output name=projects_score::{result['projects_score']}")
+                  print(f"::set-output name=activity_score::{result['activity_score']}")
+                  print(f"::set-output name=prod_score::{result['prod_score']}")
+                  
+                  # Save results
+                  os.makedirs('applications/2025/scorecards', exist_ok=True)
+                  with open(f'applications/2025/scorecards/{username}-score.json', 'w') as f:
+                      result['total_score'] = total
+                      result['username'] = username
+                      result['timestamp'] = datetime.now().isoformat()
+                      json.dump({'scores': result}, f, indent=2)
+          SCRIPT_END
+          
+          chmod +x scripts/analyze_github_profile.py
+      
+      - name: Analyze GitHub Profile
+        id: analyze
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Analyzing GitHub profile for ${{ steps.get-username.outputs.username }}..."
+          python scripts/analyze_github_profile.py "${{ steps.get-username.outputs.username }}"
+      
+      - name: Generate Scorecard
+        run: |
+          echo "📄 Generating detailed scorecard..."
+          
+          mkdir -p applications/2025/scorecards
+          
+          cat > "applications/2025/scorecards/${{ steps.get-username.outputs.username }}-scorecard.md" << EOF
+          # 🚀 Shipping Potential Analysis: @${{ steps.get-username.outputs.username }}
+          
+          **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          ## Overall Score: ${{ steps.analyze.outputs.total_score }}/100
+          
+          ### 📊 Detailed Breakdown
+          
+          | Category | Score | Weight |
+          |----------|-------|--------|
+          | 🤖 GenAI Tool Mastery | ${{ steps.analyze.outputs.genai_score }}/50 | 50% |
+          | 🌟 Open Source Contributions | ${{ steps.analyze.outputs.oss_score }}/30 | 30% |
+          | 🛠️ Project Quality | ${{ steps.analyze.outputs.projects_score }}/10 | 10% |
+          | 📈 GitHub Activity | ${{ steps.analyze.outputs.activity_score }}/5 | 5% |
+          | 🚢 Production Readiness | ${{ steps.analyze.outputs.prod_score }}/5 | 5% |
+          
+          ### 🎯 Recommendation
+          
+          $(if [ ${{ steps.analyze.outputs.total_score }} -ge 80 ]; then
+            echo "**READY TO SHIP!** 🎉 This developer shows excellent potential for the Ship-Every-Friday squad."
+          elif [ ${{ steps.analyze.outputs.total_score }} -ge 60 ]; then
+            echo "**STRONG POTENTIAL!** This developer has good foundations and could be a great addition to the team."
+          else
+            echo "**KEEP BUILDING!** We encourage this developer to strengthen their GenAI tool usage and open source contributions."
+          fi)
+          
+          ### 💡 Next Steps
+          
+          $(if [ ${{ steps.analyze.outputs.total_score }} -ge 80 ]; then
+            echo "- The team will review your application promptly"
+            echo "- Expect to hear back within 2-3 business days"
+            echo "- Start thinking about what you'd ship on your first Friday!"
+          elif [ ${{ steps.analyze.outputs.total_score }} -ge 60 ]; then
+            echo "- Your application will be reviewed by the team"
+            echo "- We may reach out for additional information"
+            echo "- Consider adding more GenAI tool usage to your projects"
+          else
+            echo "- Add .cursorrules or similar AI tool configs to your projects"
+            echo "- Contribute to more open source projects"
+            echo "- Build projects that demonstrate production readiness"
+          fi)
+          EOF
+      
+      - name: Comment Score on PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const score = ${{ steps.analyze.outputs.total_score || 0 }};
+            const emoji = score >= 80 ? '🚀' : score >= 60 ? '✈️' : '🛸';
+            
+            const comment = `${emoji} **Shipping Potential Score: ${score}/100**
+            
+            ### 📊 Analysis Breakdown:
+            - 🤖 GenAI Tool Mastery: ${{ steps.analyze.outputs.genai_score || 0 }}/50
+            - 🌟 Open Source Contributions: ${{ steps.analyze.outputs.oss_score || 0 }}/30
+            - 🛠️ Project Quality: ${{ steps.analyze.outputs.projects_score || 0 }}/10
+            - 📈 GitHub Activity: ${{ steps.analyze.outputs.activity_score || 0 }}/5
+            - 🚢 Production Readiness: ${{ steps.analyze.outputs.prod_score || 0 }}/5
+            
+            ### 🎯 Verdict:
+            ${score >= 80 ? "**READY TO SHIP!** 🎉 The team will be in touch ASAP!" : 
+              score >= 60 ? "**STRONG POTENTIAL!** Looking forward to reviewing your application!" :
+              "**KEEP BUILDING!** Focus on GenAI tools and open source contributions!"}
+            
+            ---
+            *🤖 This analysis was performed automatically by our Ship-Squad Bot*`;
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            })
+      
+      - name: Auto-label based on score
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const score = ${{ steps.analyze.outputs.total_score || 0 }};
+            let labels = [];
+            
+            // Score-based labels
+            if (score >= 80) {
+              labels.push('ready-to-ship', 'priority-review');
+            } else if (score >= 60) {
+              labels.push('high-potential');
+            }
+            
+            // Category-based labels
+            if (${{ steps.analyze.outputs.genai_score || 0 }} >= 35) {
+              labels.push('ai-power-user');
+            }
+            
+            if (${{ steps.analyze.outputs.oss_score || 0 }} >= 20) {
+              labels.push('oss-contributor');
+            }
+            
+            if (${{ steps.analyze.outputs.prod_score || 0 }} >= 4) {
+              labels.push('prod-ready');
+            }
+            
+            // Add labels to PR
+            if (labels.length > 0) {
+              try {
+                await github.rest.issues.addLabels({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: labels
+                });
+              } catch (error) {
+                console.log('Some labels may not exist:', error.message);
+              }
+            }
+
+      - name: Create High Score Issue
+        if: ${{ steps.analyze.outputs.total_score >= 80 }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const applicantUsername = '${{ steps.get-username.outputs.username }}';
+            const score = ${{ steps.analyze.outputs.total_score }};
+            
+            const issueTitle = `🚀 HIGH SCORE ALERT: ${applicantUsername} scored ${score}/100!`;
+            const issueBody = `New ship-ready developer found!
+            
+            **Applicant**: [@${applicantUsername}](https://github.com/${applicantUsername})
+            **Total Score**: ${score}/100
+            **Application PR**: #${{ github.event.pull_request.number }}
+            
+            ### Score Breakdown:
+            - 🤖 GenAI Tools: ${{ steps.analyze.outputs.genai_score }}/50
+            - 🌟 Open Source: ${{ steps.analyze.outputs.oss_score }}/30
+            - 🛠️ Projects: ${{ steps.analyze.outputs.projects_score }}/10
+            - 📈 Activity: ${{ steps.analyze.outputs.activity_score }}/5
+            - 🏭 Production Ready: ${{ steps.analyze.outputs.prod_score }}/5
+            
+            ### Quick Actions:
+            - [View Application](https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }})
+            - [GitHub Profile](https://github.com/${applicantUsername})
+            
+            This developer is ready to ship! 🚀
+            
+            cc: @alokemajumder`;
+            
+            try {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['high-score', 'ready-to-ship'],
+                assignees: ['alokemajumder']
+              });
+            } catch (error) {
+              console.log('Could not assign to alokemajumder:', error.message);
+              // Try without assignee
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['high-score', 'ready-to-ship']
+              });
+            }
