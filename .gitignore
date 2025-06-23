@@ -1,0 +1,50 @@
+# Environment variables - CRITICAL
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv
+*.egg-info/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Application data (privacy)
+applications/2025/scorecards/*.json
+applications/2025/scorecards/*.md
+applications/2025/pending/*.yml
+!applications/template.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Security
+*.pem
+*.key
+*.cert
